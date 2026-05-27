@@ -1,0 +1,11 @@
+{
+  "server": {
+    "port": 12345,
+    "autoStopTimeout": 600000,
+    "host": "localhost"
+  },
+  "mcp": {
+    "name": "canvas",
+    "version": "1.0.0"
+  }
+}

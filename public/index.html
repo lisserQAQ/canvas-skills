@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas 沙箱 - React 编辑器</title>
+
+  <!-- Ant Design CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@4.24.15/dist/antd.min.css">
+
+  <!-- CodeMirror CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      background: #000;
+      color: #fff;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #000;
+    }
+
+    /* 顶部工具栏 */
+    .top-toolbar {
+      height: 56px;
+      background: #141414;
+      border-bottom: 1px solid #303030;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      flex-shrink: 0;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .app-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .settings-btn {
+      margin-left: 12px;
+      color: #8c8c8c;
+      cursor: pointer;
+      font-size: 18px;
+      transition: color 0.3s;
+    }
+
+    .settings-btn:hover {
+      color: #1890ff;
+    }
+
+    /* 主内容区 */
+    .main-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .main-content.resizing-layout * {
+      transition: none !important;
+    }
+
+    /* 编辑器面板 */
+    .editor-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #000;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+
+    .editor-panel.hidden {
+      flex: 0 0 0 !important;
+      width: 0 !important;
+      max-width: 0 !important;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .editor-header {
+      height: 48px;
+      background: #141414;
+      border-bottom: 1px solid #303030;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .editor-title {
+      font-size: 14px;
+      color: #8c8c8c;
+      font-weight: 500;
+    }
+
+    .editor-wrapper {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #000;
+      position: relative;
+    }
+
+    #code-editor {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .CodeMirror {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100% !important;
+      width: 100% !important;
+      overflow: hidden !important;
+      position: relative;
+      font-size: 14px;
+      line-height: 1.6;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      background: #000 !important;
+    }
+
+    .CodeMirror-scroll {
+      height: 100% !important;
+      scrollbar-color: #6f6f6f transparent;
+      scrollbar-width: thin;
+    }
+
+    .CodeMirror-scroll::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+      background: transparent;
+    }
+
+    .CodeMirror-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .CodeMirror-scroll::-webkit-scrollbar-thumb {
+      background: #6f6f6f;
+      border-radius: 8px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+
+    .CodeMirror-scrollbar-filler,
+    .CodeMirror-gutter-filler {
+      background: #000 !important;
+    }
+
+    .CodeMirror-hscrollbar::-webkit-scrollbar,
+    .CodeMirror-vscrollbar::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+      background: transparent;
+    }
+
+    .CodeMirror-hscrollbar::-webkit-scrollbar-track,
+    .CodeMirror-vscrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .CodeMirror-hscrollbar::-webkit-scrollbar-thumb,
+    .CodeMirror-vscrollbar::-webkit-scrollbar-thumb {
+      background: #6f6f6f;
+      border-radius: 8px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+
+    .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover,
+    .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover {
+      background: #9a9a9a;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+
+    .CodeMirror-lines,
+    .CodeMirror pre,
+    .CodeMirror pre.CodeMirror-line,
+    .CodeMirror pre.CodeMirror-line-like {
+      white-space: pre !important;
+      word-break: normal !important;
+      overflow-wrap: normal !important;
+    }
+
+    .CodeMirror-code {
+      width: max-content !important;
+      min-width: 100% !important;
+    }
+
+    .CodeMirror-gutters {
+      background: #000 !important;
+      border-right: 1px solid #303030;
+    }
+
+    .CodeMirror-linenumber {
+      color: #595959 !important;
+    }
+
+    /* 分割线 */
+    .resizer {
+      width: 10px;
+      background: #141414;
+      cursor: col-resize;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      user-select: none;
+      touch-action: none;
+      z-index: 20;
+    }
+
+    .resizer:hover,
+    .resizer.resizing {
+      background: #1890ff;
+    }
+
+    .resizer::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 3px;
+      height: 40px;
+      background: #595959;
+      border-radius: 2px;
+    }
+
+    .resizer:hover::before,
+    .resizer.resizing::before {
+      background: #fff;
+    }
+
+    /* 预览面板 */
+    .preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #141414;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .preview-header {
+      height: 48px;
+      background: #141414;
+      border-bottom: 1px solid #303030;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .preview-title {
+      font-size: 14px;
+      color: #8c8c8c;
+      font-weight: 500;
+    }
+
+    .preview-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #f0f0f0;
+      overflow: auto;
+      padding: 20px;
+      position: relative;
+    }
+
+    .preview-wrapper {
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .preview-wrapper.desktop {
+      width: var(--desktop-preview-width, 100%);
+      height: var(--desktop-preview-height, 100%);
+      max-width: 1920px;
+      max-height: 1080px;
+    }
+
+    .preview-wrapper.mobile {
+      width: 375px;
+      height: 667px;
+      border-radius: 20px;
+      border: 8px solid #1f1f1f;
+    }
+
+    #preview-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* 加载遮罩 */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    .loading-overlay.show {
+      display: flex;
+    }
+
+    /* Ant Design Spin 样式 */
+    .ant-spin {
+      color: #1890ff;
+    }
+
+    .ant-spin-dot-item {
+      background-color: #1890ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部工具栏 -->
+    <div class="top-toolbar">
+      <div class="toolbar-left">
+        <div class="app-title">
+          <span>Canvas 沙箱</span>
+          <span id="settings-btn" class="settings-btn"></span>
+        </div>
+      </div>
+      <div id="toolbar-actions"></div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 左侧：代码编辑器 -->
+      <div class="editor-panel" id="editor-panel">
+        <div class="editor-header">
+          <span class="editor-title">代码编辑器</span>
+        </div>
+        <div class="editor-wrapper">
+          <div id="code-editor"></div>
+        </div>
+      </div>
+
+      <!-- 分割线 -->
+      <div class="resizer" id="resizer"></div>
+
+      <!-- 右侧：预览面板 -->
+      <div class="preview-panel" id="preview-panel">
+        <div class="preview-header">
+          <span class="preview-title">实时预览</span>
+          <div id="preview-actions"></div>
+        </div>
+        <div class="preview-container" id="preview-container">
+          <div class="preview-wrapper desktop" id="preview-wrapper">
+            <iframe id="preview-frame" src="/sandbox.html"></iframe>
+            <div class="loading-overlay" id="loading-overlay">
+              <div class="ant-spin ant-spin-lg ant-spin-spinning">
+                <span class="ant-spin-dot ant-spin-dot-spin">
+                  <i class="ant-spin-dot-item"></i>
+                  <i class="ant-spin-dot-item"></i>
+                  <i class="ant-spin-dot-item"></i>
+                  <i class="ant-spin-dot-item"></i>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- React & Ant Design -->
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ant-design/icons@4.8.0/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@4.24.15/dist/antd.min.js"></script>
+
+  <!-- CodeMirror JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+
+  <script>
+    // 等待所有库加载完成
+    window.addEventListener('load', function() {
+      if (typeof CodeMirror === 'undefined') {
+        console.error('CodeMirror 未加载');
+        return;
+      }
+
+      if (typeof antd === 'undefined') {
+        console.error('Ant Design 未加载');
+        return;
+      }
+
+      const { Button, Space, message, Modal, Form, InputNumber } = antd;
+      const MIN_EDITOR_PERCENT = 18;
+      const MAX_EDITOR_PERCENT = 82;
+
+      // 设置对话框状态
+      let settingsModalVisible = false;
+      let settingsForm = null;
+      let settingsModalRoot = null;
+
+      // 初始化 CodeMirror 编辑器
+      const editor = CodeMirror(document.getElementById('code-editor'), {
+        mode: 'javascript',
+        theme: 'monokai',
+        lineNumbers: true,
+        tabSize: 2,
+        indentWithTabs: false,
+        lineWrapping: false,
+        autoCloseBrackets: true,
+        matchBrackets: true,
+        scrollbarStyle: 'native'
+      });
+
+      // DOM 元素
+      const mainContent = document.querySelector('.main-content');
+      const editorPanel = document.getElementById('editor-panel');
+      const editorWrapper = document.querySelector('.editor-wrapper');
+      const previewPanel = document.getElementById('preview-panel');
+      const previewContainer = document.getElementById('preview-container');
+      const resizer = document.getElementById('resizer');
+      const previewFrame = document.getElementById('preview-frame');
+      const previewWrapper = document.getElementById('preview-wrapper');
+      const loadingOverlay = document.getElementById('loading-overlay');
+
+      // 状态
+      let isCodeVisible = true;
+      let isResizing = false;
+      let currentDevice = 'desktop';
+      let debounceTimer = null;
+      let dragPointerId = null;
+      let editorPercent = 50;
+      const DESKTOP_PREVIEW_RATIO = 16 / 9;
+
+      function resizeEditor() {
+        const height = editorWrapper.clientHeight;
+        editor.setSize('100%', height > 0 ? height : '100%');
+        editor.refresh();
+      }
+
+      function resizeDesktopPreview() {
+        if (currentDevice !== 'desktop') {
+          previewWrapper.style.removeProperty('--desktop-preview-width');
+          previewWrapper.style.removeProperty('--desktop-preview-height');
+          return;
+        }
+
+        const styles = window.getComputedStyle(previewContainer);
+        const paddingX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
+        const paddingY = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+        const availableWidth = Math.max(previewContainer.clientWidth - paddingX, 1);
+        const availableHeight = Math.max(previewContainer.clientHeight - paddingY, 1);
+        const width = Math.min(availableWidth, availableHeight * DESKTOP_PREVIEW_RATIO, 1920);
+        const height = width / DESKTOP_PREVIEW_RATIO;
+
+        previewWrapper.style.setProperty('--desktop-preview-width', `${width}px`);
+        previewWrapper.style.setProperty('--desktop-preview-height', `${height}px`);
+      }
+
+      function resizeLayout() {
+        resizeEditor();
+        resizeDesktopPreview();
+      }
+
+      // 加载配置
+      async function loadConfig() {
+        try {
+          const response = await fetch('/api/get-config');
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error('加载配置失败:', error);
+          return null;
+        }
+      }
+
+      // 保存配置
+      async function saveConfig(config) {
+        try {
+          const response = await fetch('/api/update-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+          });
+          const data = await response.json();
+          return data.success;
+        } catch (error) {
+          console.error('保存配置失败:', error);
+          return false;
+        }
+      }
+
+      // 打开设置对话框
+      async function openSettingsModal() {
+        const config = await loadConfig();
+        if (!config) {
+          message.error('加载配置失败');
+          return;
+        }
+
+        settingsModalVisible = true;
+        renderSettingsModal(config);
+      }
+
+      // 关闭设置对话框
+      function closeSettingsModal() {
+        settingsModalVisible = false;
+        renderSettingsModal(null);
+      }
+
+      // 渲染设置对话框
+      function renderSettingsModal(config) {
+        let container = document.getElementById('settings-modal-container');
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'settings-modal-container';
+          document.body.appendChild(container);
+        }
+
+        if (!settingsModalRoot) {
+          settingsModalRoot = ReactDOM.createRoot(container);
+        }
+
+        if (!settingsModalVisible || !config) {
+          settingsModalRoot.render(null);
+          return;
+        }
+
+        const SettingsModal = () => {
+          const [form] = Form.useForm();
+          const [loading, setLoading] = React.useState(false);
+
+          // 设置初始值
+          React.useEffect(() => {
+            form.setFieldsValue({
+              port: config.server.port,
+              autoStopTimeout: config.server.autoStopTimeout / 60000 // 转换为分钟
+            });
+          }, []);
+
+          const handleOk = async () => {
+            try {
+              const values = await form.validateFields();
+
+              // 验证端口号
+              if (values.port < 1024 || values.port > 65535) {
+                message.error('端口号必须在 1024-65535 之间');
+                return;
+              }
+
+              // 验证超时时间
+              if (values.autoStopTimeout < 0 || values.autoStopTimeout > 1440) {
+                message.error('自动停止时间必须在 0-1440 分钟之间');
+                return;
+              }
+
+              setLoading(true);
+
+              const newConfig = {
+                server: {
+                  port: values.port,
+                  autoStopTimeout: values.autoStopTimeout * 60000, // 转换为毫秒
+                  host: config.server.host
+                },
+                mcp: config.mcp
+              };
+
+              const success = await saveConfig(newConfig);
+
+              if (success) {
+                message.success('配置已保存，请重启服务器使配置生效');
+                closeSettingsModal();
+              } else {
+                message.error('保存配置失败');
+              }
+            } catch (error) {
+              console.error('验证失败:', error);
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          return React.createElement(Modal, {
+            title: '服务器设置',
+            open: true,
+            centered: true,
+            onOk: handleOk,
+            onCancel: closeSettingsModal,
+            confirmLoading: loading,
+            okText: '确认',
+            cancelText: '取消',
+            width: 500
+          },
+            React.createElement(Form, {
+              form: form,
+              layout: 'vertical',
+              autoComplete: 'off'
+            },
+              React.createElement(Form.Item, {
+                label: '服务器端口',
+                name: 'port',
+                rules: [
+                  { required: true, message: '请输入端口号' },
+                  { type: 'number', min: 1024, max: 65535, message: '端口号必须在 1024-65535 之间' }
+                ]
+              },
+                React.createElement(InputNumber, {
+                  style: { width: '100%' },
+                  min: 1024,
+                  max: 65535,
+                  placeholder: '请输入端口号 (1024-65535)'
+                })
+              ),
+              React.createElement(Form.Item, {
+                label: '自动停止时间（分钟）',
+                name: 'autoStopTimeout',
+                rules: [
+                  { required: true, message: '请输入自动停止时间' },
+                  { type: 'number', min: 0, max: 1440, message: '时间必须在 0-1440 分钟之间' }
+                ],
+                extra: '服务器空闲指定时间后自动停止（0 表示永不停止）'
+              },
+                React.createElement(InputNumber, {
+                  style: { width: '100%' },
+                  min: 0,
+                  max: 1440,
+                  placeholder: '请输入分钟数 (0-1440)'
+                })
+              )
+            )
+          );
+        };
+
+        settingsModalRoot.render(React.createElement(SettingsModal));
+      }
+
+      // 渲染设置按钮
+      function renderSettingsButton() {
+        const container = document.getElementById('settings-btn');
+        if (!container || typeof icons === 'undefined') return;
+
+        const root = ReactDOM.createRoot(container);
+        root.render(
+          React.createElement(icons.SettingOutlined, {
+            onClick: openSettingsModal,
+            style: { cursor: 'pointer', fontSize: '18px' }
+          })
+        );
+      }
+
+      // 渲染工具栏按钮
+      function renderToolbarActions() {
+        const container = document.getElementById('toolbar-actions');
+        const root = ReactDOM.createRoot(container);
+
+        root.render(
+          React.createElement(Space, { size: 'middle' },
+            React.createElement(Button, {
+              type: 'primary',
+              onClick: refreshPreview
+            }, '刷新预览'),
+            React.createElement(Button, {
+              onClick: toggleCodeVisibility
+            }, isCodeVisible ? '隐藏代码' : '显示代码')
+          )
+        );
+      }
+
+      // 渲染预览操作按钮
+      function renderPreviewActions() {
+        const container = document.getElementById('preview-actions');
+        const root = ReactDOM.createRoot(container);
+
+        root.render(
+          React.createElement(Space, { size: 'small' },
+            React.createElement(Button, {
+              type: currentDevice === 'desktop' ? 'primary' : 'default',
+              size: 'small',
+              onClick: () => switchDevice('desktop')
+            }, '电脑'),
+            React.createElement(Button, {
+              type: currentDevice === 'mobile' ? 'primary' : 'default',
+              size: 'small',
+              onClick: () => switchDevice('mobile')
+            }, '手机')
+          )
+        );
+      }
+
+      // 加载初始代码
+      async function loadCode() {
+        try {
+          const response = await fetch('/api/get-code');
+          const data = await response.json();
+          editor.setValue(data.code);
+          setTimeout(resizeLayout, 0);
+          message.success('代码已加载');
+        } catch (error) {
+          message.error('加载失败');
+          console.error('加载代码失败:', error);
+        }
+      }
+
+      // 刷新预览
+      function refreshPreview() {
+        const code = editor.getValue();
+
+        if (previewFrame.contentWindow) {
+          loadingOverlay.classList.add('show');
+
+          previewFrame.contentWindow.postMessage({
+            type: 'UPDATE_CODE',
+            code: code
+          }, '*');
+
+          setTimeout(() => {
+            loadingOverlay.classList.remove('show');
+            message.success('预览已刷新');
+          }, 500);
+        } else {
+          message.error('预览未就绪');
+        }
+      }
+
+      // 实时预览（防抖）
+      function livePreview() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          const code = editor.getValue();
+          if (previewFrame.contentWindow) {
+            loadingOverlay.classList.add('show');
+            previewFrame.contentWindow.postMessage({
+              type: 'UPDATE_CODE',
+              code: code
+            }, '*');
+            setTimeout(() => {
+              loadingOverlay.classList.remove('show');
+            }, 300);
+          }
+        }, 1000);
+      }
+
+      // 切换代码显示
+      function toggleCodeVisibility() {
+        isCodeVisible = !isCodeVisible;
+
+        if (isCodeVisible) {
+          editorPanel.classList.remove('hidden');
+          resizer.style.display = 'block';
+          applySplit(editorPercent);
+          setTimeout(() => {
+            resizeLayout();
+          }, 0);
+        } else {
+          finishResize();
+          editorPanel.classList.add('hidden');
+          editorPanel.style.flex = '0 0 0px';
+          editorPanel.style.width = '0px';
+          editorPanel.style.maxWidth = '0px';
+          resizer.style.display = 'none';
+          previewPanel.style.flex = '1 1 auto';
+          requestAnimationFrame(resizeDesktopPreview);
+        }
+
+        renderToolbarActions();
+      }
+
+      // 切换设备模式
+      function switchDevice(device) {
+        currentDevice = device;
+        previewWrapper.className = `preview-wrapper ${device}`;
+        resizeDesktopPreview();
+        renderPreviewActions();
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+      }
+
+      function applySplit(percent) {
+        editorPercent = clamp(percent, MIN_EDITOR_PERCENT, MAX_EDITOR_PERCENT);
+        editorPanel.style.width = '';
+        editorPanel.style.maxWidth = '';
+        editorPanel.style.flex = `0 0 ${editorPercent}%`;
+        previewPanel.style.flex = `1 1 ${100 - editorPercent}%`;
+        resizeLayout();
+      }
+
+      function updateSplitFromPointer(clientX) {
+        const rect = mainContent.getBoundingClientRect();
+        const dividerWidth = resizer.offsetWidth;
+        const availableWidth = Math.max(rect.width - dividerWidth, 1);
+        const pointerX = clamp(clientX - rect.left, 0, availableWidth);
+        applySplit((pointerX / availableWidth) * 100);
+      }
+
+      function finishResize() {
+        if (!isResizing) return;
+
+        isResizing = false;
+        dragPointerId = null;
+        mainContent.classList.remove('resizing-layout');
+        resizer.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        previewFrame.style.pointerEvents = '';
+        resizeLayout();
+      }
+
+      function blurEditorFromPreview() {
+        editor.getInputField().blur();
+      }
+
+      function attachPreviewFrameBlurHandler() {
+        try {
+          previewFrame.contentWindow.document.addEventListener('pointerdown', blurEditorFromPreview);
+        } catch (error) {
+          // Ignore cross-origin errors if the preview frame is ever pointed elsewhere.
+        }
+      }
+
+      // 分割线拖动（跟手）
+      resizer.addEventListener('pointerdown', (e) => {
+        isResizing = true;
+        dragPointerId = e.pointerId;
+        resizer.setPointerCapture(e.pointerId);
+        mainContent.classList.add('resizing-layout');
+        resizer.classList.add('resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        previewFrame.style.pointerEvents = 'none';
+        updateSplitFromPointer(e.clientX);
+        e.preventDefault();
+      });
+
+      resizer.addEventListener('pointermove', (e) => {
+        if (!isResizing) return;
+        updateSplitFromPointer(e.clientX);
+        e.preventDefault();
+      });
+
+      resizer.addEventListener('pointerup', (e) => {
+        if (dragPointerId === e.pointerId && resizer.hasPointerCapture(e.pointerId)) {
+          resizer.releasePointerCapture(e.pointerId);
+        }
+
+        finishResize();
+      });
+
+      resizer.addEventListener('pointercancel', finishResize);
+      window.addEventListener('blur', finishResize);
+      window.addEventListener('resize', resizeLayout);
+
+      if (window.ResizeObserver) {
+        const previewObserver = new ResizeObserver(resizeDesktopPreview);
+        previewObserver.observe(previewContainer);
+      }
+
+      document.addEventListener('pointerup', finishResize);
+
+      previewPanel.addEventListener('pointerdown', () => {
+        if (!isResizing) {
+          blurEditorFromPreview();
+        }
+      });
+
+      previewFrame.addEventListener('load', attachPreviewFrameBlurHandler);
+
+      // 监听代码变化（实时预览）
+      editor.on('change', livePreview);
+
+      // 监听来自沙箱的消息
+      window.addEventListener('message', (event) => {
+        if (event.data.type === 'RENDER_ERROR') {
+          loadingOverlay.classList.remove('show');
+          message.error(`渲染错误: ${event.data.error}`);
+        } else if (event.data.type === 'RENDER_SUCCESS') {
+          loadingOverlay.classList.remove('show');
+        }
+      });
+
+      // 快捷键：Ctrl+S 刷新
+      editor.on('keydown', (cm, e) => {
+        if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          refreshPreview();
+        }
+      });
+
+      // 初始化
+      renderSettingsButton();
+      renderToolbarActions();
+      renderPreviewActions();
+      loadCode();
+      applySplit(editorPercent);
+      setTimeout(resizeLayout, 0);
+      attachPreviewFrameBlurHandler();
+    });
+  </script>
+</body>
+</html>

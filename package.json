@@ -1,0 +1,24 @@
+{
+  "name": "canvas-skills",
+  "version": "1.0.0",
+  "description": "本地 Canvas 沙箱 - TypeScript + LangChain + React",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc && node dist/server.js",
+    "mcp": "node dist/mcp-server.js"
+  },
+  "keywords": ["canvas", "sandbox", "langchain", "react", "typescript"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "open": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

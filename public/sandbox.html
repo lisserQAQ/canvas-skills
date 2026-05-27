@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>React 沙箱</title>
+  <script src="/assets/react.production.min.js"></script>
+  <script src="/assets/react-dom.production.min.js"></script>
+  <script src="/assets/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    }
+    #root {
+      width: 100%;
+      height: 100vh;
+    }
+    .error-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      color: #ff6b6b;
+      padding: 40px;
+      font-family: 'Consolas', monospace;
+      font-size: 14px;
+      overflow: auto;
+      z-index: 9999;
+    }
+    .error-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // 全局 render 函数，供用户代码调用。兼容 render(App) 和 render(<App />)。
+    window.render = function(ComponentOrElement) {
+      try {
+        const element = React.isValidElement(ComponentOrElement)
+          ? ComponentOrElement
+          : React.createElement(ComponentOrElement);
+
+        // 使用 React 17 兼容的渲染方式
+        ReactDOM.render(
+          element,
+          document.getElementById('root')
+        );
+
+        // 通知父窗口渲染成功
+        window.parent.postMessage({ type: 'RENDER_SUCCESS' }, '*');
+      } catch (error) {
+        showError(error);
+        window.parent.postMessage({
+          type: 'RENDER_ERROR',
+          error: error.message
+        }, '*');
+      }
+    };
+
+    // 错误显示函数
+    function showError(error) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-overlay';
+      errorDiv.innerHTML = `
+        <div class="error-title">⚠️ 渲染错误</div>
+        <pre>${error.stack || error.message}</pre>
+      `;
+      document.body.appendChild(errorDiv);
+    }
+
+    // 转换 import 语句为全局变量解构
+    function transformImports(code) {
+      // 移除 import React 相关语句，因为 React 已经是全局变量
+      return code
+        // 处理: import React, { useState, useMemo } from 'react';
+        .replace(
+          /import\s+React\s*,?\s*\{([^}]*)\}\s*from\s*['"]react['"]\s*;?/g,
+          (match, imports) => {
+            const cleanImports = imports.trim();
+            return cleanImports ? `const { ${cleanImports} } = React;` : '';
+          }
+        )
+        // 处理: import React from 'react';
+        .replace(
+          /import\s+React\s+from\s+['"]react['"]\s*;?/g,
+          ''
+        )
+        // 处理: import { useState, useEffect } from 'react';
+        .replace(
+          /import\s*\{([^}]*)\}\s*from\s*['"]react['"]\s*;?/g,
+          (match, imports) => `const { ${imports.trim()} } = React;`
+        )
+        // 处理: import { render } from 'react-dom'; (移除，因为 render 已经是全局函数)
+        .replace(
+          /import\s*\{[^}]*\}\s*from\s*['"]react-dom['"]\s*;?/g,
+          ''
+        )
+        // 处理: import ReactDOM from 'react-dom';
+        .replace(
+          /import\s+ReactDOM\s+from\s+['"]react-dom['"]\s*;?/g,
+          ''
+        );
+    }
+
+    // 监听来自父窗口的代码更新
+    window.addEventListener('message', (event) => {
+      if (event.data.type === 'UPDATE_CODE') {
+        try {
+          // 清除旧的错误提示
+          const oldError = document.querySelector('.error-overlay');
+          if (oldError) oldError.remove();
+
+          // 先卸载旧组件
+          const root = document.getElementById('root');
+          ReactDOM.unmountComponentAtNode(root);
+
+          // 转换 import 语句
+          const processedCode = transformImports(event.data.code);
+
+          // 使用 Babel 转译并执行代码
+          const transformedCode = Babel.transform(processedCode, {
+            presets: ['react']
+          }).code;
+
+          // 在沙箱环境中执行
+          eval(transformedCode);
+        } catch (error) {
+          console.error('执行错误:', error);
+          showError(error);
+          window.parent.postMessage({
+            type: 'RENDER_ERROR',
+            error: error.message
+          }, '*');
+        }
+      }
+    });
+
+    // 初始加载
+    (async function() {
+      try {
+        const response = await fetch('/api/get-code');
+        const data = await response.json();
+
+        console.log('原始代码长度:', data.code.length);
+
+        // 转换 import 语句
+        const processedCode = transformImports(data.code);
+
+        const transformedCode = Babel.transform(processedCode, {
+          presets: ['react']
+        }).code;
+
+        console.log('转译后代码长度:', transformedCode.length);
+        console.log('转译后代码片段:', transformedCode.substring(0, 200));
+
+        // 执行转译后的代码
+        eval(transformedCode);
+
+        console.log('代码执行完成');
+      } catch (error) {
+        console.error('初始加载错误:', error);
+        console.error('错误堆栈:', error.stack);
+        showError(error);
+      }
+    })();
+  </script>
+</body>
+</html>
