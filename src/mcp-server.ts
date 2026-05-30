@@ -18,7 +18,7 @@ const configPath = path.join(__dirname, '../config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
 const SERVER_PORT = config.server.port;
-const AUTO_STOP_TIMEOUT = config.server.autoStopTimeout; // 5分钟 = 300000ms
+const AUTO_STOP_TIMEOUT = config.server.autoStopTimeout;
 const PID_FILE = path.join(__dirname, '../.server.pid');
 
 // 🚀 创建 MCP Server
@@ -189,7 +189,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'renderReactCanvas',
-        description: '在本地浏览器的 Canvas 沙箱中渲染 React 代码。支持 JSX、Hooks、Tailwind CSS。代码会在双面板界面中显示：左侧是代码编辑器，右侧是实时预览。服务器会在空闲 5 分钟后自动停止。',
+        description: `在本地浏览器的 Canvas 沙箱中渲染 React 代码。支持 JSX、Hooks、Tailwind CSS。代码会在双面板界面中显示：左侧是代码编辑器，右侧是实时预览。服务器会在空闲 ${AUTO_STOP_TIMEOUT / 60000} 分钟后自动停止。`,
         inputSchema: {
           type: 'object',
           properties: {

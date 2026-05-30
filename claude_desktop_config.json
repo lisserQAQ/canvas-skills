@@ -5,7 +5,10 @@
       "args": [
         "D:/canvas-skills/dist/mcp-server.js"
       ],
-      "env": {}
+      "env": {
+        "PORT": "12345",
+        "HOST": "localhost"
+      }
     }
   }
 }

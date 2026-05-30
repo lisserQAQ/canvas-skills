@@ -191,7 +191,7 @@ render(App);
 {
   "server": {
     "port": 12345,              // 服务器端口
-    "autoStopTimeout": 300000,  // 自动停止时间（毫秒）
+    "autoStopTimeout": 600000,  // 自动停止时间（毫秒）
     "host": "localhost"         // 监听地址
   },
   "mcp": {
@@ -219,12 +219,12 @@ render(App);
 
 #### server.autoStopTimeout
 - **类型**: `number` (毫秒)
-- **默认值**: `300000` (5 分钟)
+- **默认值**: `600000` (10 分钟)
 - **说明**: 服务器空闲多久后自动停止
 - **常用值**:
   - `60000` - 1 分钟
-  - `300000` - 5 分钟（默认）
-  - `600000` - 10 分钟
+  - `300000` - 5 分钟
+  - `600000` - 10 分钟（默认）
   - `0` - 永不自动停止
 
 ---
@@ -352,7 +352,7 @@ npm run dev
 {
   "server": {
     "port": 12345,
-    "autoStopTimeout": 300000,
+    "autoStopTimeout": 600000,
     "host": "localhost"
   },
   "mcp": {
@@ -371,7 +371,7 @@ npm run dev
 {
   "server": {
     "port": 12345,
-    "autoStopTimeout": 300000,
+    "autoStopTimeout": 600000,
     "host": "localhost"
   },
   "mcp": {
