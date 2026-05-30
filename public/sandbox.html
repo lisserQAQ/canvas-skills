@@ -59,13 +59,13 @@
         );
 
         // 通知父窗口渲染成功
-        window.parent.postMessage({ type: 'RENDER_SUCCESS' }, '*');
+        window.parent.postMessage({ type: 'RENDER_SUCCESS' }, window.location.origin);
       } catch (error) {
         showError(error);
         window.parent.postMessage({
           type: 'RENDER_ERROR',
           error: error.message
-        }, '*');
+        }, window.location.origin);
       }
     };
 
@@ -73,10 +73,16 @@
     function showError(error) {
       const errorDiv = document.createElement('div');
       errorDiv.className = 'error-overlay';
-      errorDiv.innerHTML = `
-        <div class="error-title">⚠️ 渲染错误</div>
-        <pre>${error.stack || error.message}</pre>
-      `;
+
+      const title = document.createElement('div');
+      title.className = 'error-title';
+      title.textContent = '⚠️ 渲染错误';
+
+      const pre = document.createElement('pre');
+      pre.textContent = error.stack || error.message;
+
+      errorDiv.appendChild(title);
+      errorDiv.appendChild(pre);
       document.body.appendChild(errorDiv);
     }
 
@@ -116,6 +122,7 @@
 
     // 监听来自父窗口的代码更新
     window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
       if (event.data.type === 'UPDATE_CODE') {
         try {
           // 清除旧的错误提示
@@ -142,7 +149,7 @@
           window.parent.postMessage({
             type: 'RENDER_ERROR',
             error: error.message
-          }, '*');
+          }, window.location.origin);
         }
       }
     });
