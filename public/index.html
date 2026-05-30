@@ -756,7 +756,7 @@
           previewFrame.contentWindow.postMessage({
             type: 'UPDATE_CODE',
             code: code
-          }, '*');
+          }, window.location.origin);
 
           setTimeout(() => {
             loadingOverlay.classList.remove('show');
@@ -777,7 +777,7 @@
             previewFrame.contentWindow.postMessage({
               type: 'UPDATE_CODE',
               code: code
-            }, '*');
+            }, window.location.origin);
             setTimeout(() => {
               loadingOverlay.classList.remove('show');
             }, 300);
@@ -916,6 +916,7 @@
 
       // 监听来自沙箱的消息
       window.addEventListener('message', (event) => {
+        if (event.origin !== window.location.origin) return;
         if (event.data.type === 'RENDER_ERROR') {
           loadingOverlay.classList.remove('show');
           message.error(`渲染错误: ${event.data.error}`);

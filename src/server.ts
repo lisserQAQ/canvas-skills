@@ -10,6 +10,7 @@ const configPath = path.join(__dirname, '../config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 const PORT = config.server.port;
 const AUTO_STOP_TIMEOUT = config.server.autoStopTimeout;
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
 // 🚀 核心：代码只存在这个 RAM 变量里！
 let latestReactCode: string = `const App = () => {
@@ -57,8 +58,9 @@ const server = http.createServer((req, res) => {
 
   resetAutoStopTimer();
 
-  // CORS 头部，允许跨域访问
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS: restrict to same-origin (localhost)
+  const allowedOrigin = `http://localhost:${PORT}`;
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -78,10 +80,25 @@ const server = http.createServer((req, res) => {
   // 2. API: 更新代码
   if (req.url === '/api/update-code' && req.method === 'POST') {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
       try {
         const data = JSON.parse(body);
+        if (typeof data.code !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing or invalid code field' }));
+          return;
+        }
         latestReactCode = data.code;
         console.log('✅ 代码已更新到内存');
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -110,20 +127,55 @@ const server = http.createServer((req, res) => {
   // 4. API: 更新配置
   if (req.url === '/api/update-config' && req.method === 'POST') {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
       try {
         const newConfig = JSON.parse(body);
 
-        // 验证配置
-        if (!newConfig.server || !newConfig.server.port || !newConfig.mcp) {
+        // 验证配置结构和类型
+        if (!newConfig.server || !newConfig.mcp) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Invalid config format' }));
           return;
         }
 
-        // 保存配置到文件
-        fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf-8');
+        const port = newConfig.server.port;
+        const timeout = newConfig.server.autoStopTimeout;
+        if (typeof port !== 'number' || port < 1024 || port > 65535) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Port must be a number between 1024 and 65535' }));
+          return;
+        }
+        if (typeof timeout !== 'number' || timeout < 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'autoStopTimeout must be a non-negative number' }));
+          return;
+        }
+
+        // Only persist the known config shape
+        const safeConfig = {
+          server: {
+            port,
+            autoStopTimeout: timeout,
+            host: typeof newConfig.server.host === 'string' ? newConfig.server.host : 'localhost'
+          },
+          mcp: {
+            name: typeof newConfig.mcp.name === 'string' ? newConfig.mcp.name : config.mcp.name,
+            version: typeof newConfig.mcp.version === 'string' ? newConfig.mcp.version : config.mcp.version
+          }
+        };
+
+        fs.writeFileSync(configPath, JSON.stringify(safeConfig, null, 2), 'utf-8');
         console.log('✅ 配置已保存到文件');
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -148,8 +200,15 @@ const server = http.createServer((req, res) => {
   } else if (req.url === '/sandbox.html') {
     filePath = path.join(publicDir, 'sandbox.html');
   } else if (req.url?.startsWith('/assets/')) {
-    const assetName = req.url.replace('/assets/', '');
+    const assetName = path.basename(req.url.replace('/assets/', ''));
     filePath = path.join(assetsDir, assetName);
+
+    // Prevent path traversal
+    if (!filePath.startsWith(assetsDir)) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
 
     if (assetName.endsWith('.js')) {
       contentType = 'application/javascript';
